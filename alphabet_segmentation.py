@@ -1,5 +1,6 @@
 import math
 import cv2
+from matplotlib import pyplot as plt
 import numpy as np
 import os
 
@@ -61,20 +62,28 @@ def segment_characters(image_path, output_folder):
     # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+    # Apply median blur to reduce noise
+    gray = cv2.medianBlur(gray, 5)
     # Apply Gaussian Blur to reduce noise
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
+        # Define a kernel for morphological operations
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+
+    # Apply morphological opening to remove small white noise
+    # blurred = cv2.morphologyEx(blurred, cv2.MORPH_OPEN, kernel)
+
     # Apply Otsu's Thresholding after Gaussian filtering
     _, thresh = cv2.threshold(
-        blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_TRIANGLE
     )
+    # plt.imshow(thresh,'gray',vmin=0,vmax=255)
+    # plt.show()
 
     # Find contours on the dilated image
     contours, hierarchy = cv2.findContours(
         thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-    # thresh = cv2.erode(thresh, None, iterations=2)
-    # thresh = cv2.dilate(thresh, None, iterations=2)
     # bounding_boxes = [cv2.boundingRect(c) for c in contours]
 
     # Calculate bounding boxes and extreme points
@@ -99,7 +108,7 @@ def segment_characters(image_path, output_folder):
         ]
         x = info['extLeft'][0]
         y = info['extLeft'][1]
-        cv2.imwrite(os.path.join("mediate_res", f'letter_{x}_{y}.png'), roi)
+        # cv2.imwrite(os.path.join("mediate_res", f'letter_{x}_{y}.png'), roi)
 
     # avg_area = np.mean([c['area'] for c in contours_info])
 
@@ -133,8 +142,10 @@ def segment_characters(image_path, output_folder):
                         info['extLeft'] = other['extLeft'] if other['extLeft'][0] < info['extLeft'][0] else info['extLeft']
                         info['extRight'] = other['extRight'] if other['extRight'][0] > info['extRight'][0] else info['extRight']
                         merged_contours.append(info)
-                        skip_indices.update([i, j])
+                        skip_indices.add(j)
                         break
+
+            skip_indices.add(i)
 
     for i, info in enumerate(contours_info):
         if i not in skip_indices:
@@ -148,14 +159,15 @@ def segment_characters(image_path, output_folder):
             info['extTop'][1]:info['extBot'][1],
             info['extLeft'][0]:info['extRight'][0]
         ]
-        cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), roi)
+        if roi.shape[0] > 0 and roi.shape[1] > 0:
+            cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), roi)
 
     print(f"Extracted {len(merged_contours)} letters.")
 
 
 if __name__ == "__main__":
-    # image_path = "input.jpeg"
-    image_path = "input_marry.jpg"
+    image_path = "input.jpeg"
+    # image_path = "input_marry.jpg"
     # image_path = "inpu_i.jpeg"
     output_folder = "result"
     segment_characters(image_path, output_folder)
