@@ -3,8 +3,10 @@ import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 import os
+import svgwrite
+import potrace
 
-def sort_contours(contours_info, row_threshold=300):
+def sort_contours(contours_info, row_threshold=200):
     """
     Organizes contours into a matrix based on their positions.
 
@@ -63,23 +65,26 @@ def segment_characters(image_path, output_folder):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Apply median blur to reduce noise
-    gray = cv2.medianBlur(gray, 5)
+    # gray = cv2.medianBlur(gray, 5)
     # Apply Gaussian Blur to reduce noise
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
 
         # Define a kernel for morphological operations
     # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
     # Apply morphological opening to remove small white noise
-    # blurred = cv2.morphologyEx(blurred, cv2.MORPH_OPEN, kernel)
 
     # Apply Otsu's Thresholding after Gaussian filtering
     _, thresh = cv2.threshold(
-        blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_TRIANGLE
+        blurred, 100, 255, 1 # cv2.THRESH_BINARY_INV + cv2.THRESH_TRIANGLE
     )
+    # blurred = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
     # plt.imshow(thresh,'gray',vmin=0,vmax=255)
     # plt.show()
+    # return
 
+    # mask_inv = cv2.bitwise_not(thresh)
     # Find contours on the dilated image
     contours, hierarchy = cv2.findContours(
         thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -159,8 +164,55 @@ def segment_characters(image_path, output_folder):
             info['extTop'][1]:info['extBot'][1],
             info['extLeft'][0]:info['extRight'][0]
         ]
+        roi = cv2.bitwise_not(roi)
         if roi.shape[0] > 0 and roi.shape[1] > 0:
             cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), roi)
+        # width = info['extRight'][0] - info['extLeft'][0]
+        # height = info['extBot'][1] - info['extTop'][1]
+
+        # mask = np.ones((height, width), dtype=np.uint8) * 255
+        # cv2.drawContours(mask, info["contour"], -1, (0, 0, 0), thickness=cv2.FILLED)
+
+        # Set background (non-contour areas) to transparent
+        # Where the binary image is black, make alpha channel transparent (0)
+        # mask[:, :, 3] = np.where(roi == 0, 0, 255)
+
+        # cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), mask)
+        # cv2.imshow("Contours on White Background", roi)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # Create an SVG drawing
+        # dwg = svgwrite.Drawing(os.path.join(output_folder, f'letter_{idx}.svg'), profile='tiny')
+
+        # # # Create a path string from the contour points
+        # # path_data = "M " + " ".join(f"{point[0][0]} {point[0][1]}" for point in info["contour"]) + "Z"
+
+        # # Create a bitmap from the array
+        # bmp = potrace.Bitmap(info["contour"])
+
+        # # Trace the bitmap to a path
+        # path = bmp.trace()
+
+        # # Add the path to the drawing
+        # dwg.add(dwg.path(d=path))
+
+        # # Save the SVG file
+        # dwg.save()
+
+
+        # height = info['extBot'][1] - info['extTop'][1]
+        # width = info['extRight'][0] - info['extLeft'][0]
+        # f = open(os.path.join(output_folder, f'letter_{idx}.svg'), 'w+')
+        # f.write('<svg width="'+str(width)+'" height="'+str(height)+'" xmlns="http://www.w3.org/2000/svg">')
+        # f.write('<path d="M')
+        # for i in range(len(info['contour'])):
+        #     #print(c[i][0])
+        #     x, y = info['contour'][i][0]
+        #     print(x)
+        #     f.write(str(x)+  ' ' + str(y)+' ')
+        # f.write('Z"/>')
+        # f.write('</svg>')
+        # f.close()
 
     print(f"Extracted {len(merged_contours)} letters.")
 
