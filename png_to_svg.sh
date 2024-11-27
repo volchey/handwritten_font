@@ -11,16 +11,29 @@ if ! command -v potrace &> /dev/null; then
   exit 1
 fi
 
-# Loop through all PNG files in the current directory
-for pngfile in *.png; do
+# Set the directory to work on
+if [ -n "$1" ]; then
+  WORK_DIR="$1"
+else
+  WORK_DIR="."
+fi
+
+# Check if the directory exists
+if [ ! -d "$WORK_DIR" ]; then
+  echo "The specified directory does not exist: $WORK_DIR"
+  exit 1
+fi
+
+# Loop through all PNG files in the specified directory
+for pngfile in "$WORK_DIR"/*.png; do
   if [ -e "$pngfile" ]; then
     FILE=`basename "$pngfile" .png`
-    echo "Converting $pngfile to $FILE.svg"
-    magick "$pngfile" "$FILE.pnm"
-    potrace -s -o "$FILE.svg" "$FILE.pnm"
-    rm "$FILE.pnm"
+    # echo "Converting $pngfile to $WORK_DIR/$FILE.svg"
+    magick "$pngfile" "$WORK_DIR/$FILE.pbm"
+    potrace -s -o "$WORK_DIR/$FILE.svg" "$WORK_DIR/$FILE.pbm" --tight
+    rm "$WORK_DIR/$FILE.pbm"
   else
-    echo "No PNG files found in the current directory."
+    echo "No PNG files found in the directory: $WORK_DIR"
     exit 1
   fi
 done

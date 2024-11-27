@@ -1,12 +1,11 @@
 import math
+import subprocess
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-import svgwrite
-import potrace
 
-def sort_contours(contours_info, row_threshold=200):
+def sort_contours(contours_info, row_threshold=100):
     """
     Organizes contours into a matrix based on their positions.
 
@@ -64,41 +63,31 @@ def segment_characters(image_path, output_folder):
     # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Apply median blur to reduce noise
-    # gray = cv2.medianBlur(gray, 5)
     # Apply Gaussian Blur to reduce noise
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
 
-        # Define a kernel for morphological operations
-    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-
-    # Apply morphological opening to remove small white noise
-
     # Apply Otsu's Thresholding after Gaussian filtering
     _, thresh = cv2.threshold(
-        blurred, 100, 255, 1 # cv2.THRESH_BINARY_INV + cv2.THRESH_TRIANGLE
+        blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_TRIANGLE
     )
-    # blurred = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-    # plt.imshow(thresh,'gray',vmin=0,vmax=255)
-    # plt.show()
-    # return
+    # cv2.imshow('Dilated Image', thresh)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
-    # mask_inv = cv2.bitwise_not(thresh)
     # Find contours on the dilated image
     contours, hierarchy = cv2.findContours(
         thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-    # bounding_boxes = [cv2.boundingRect(c) for c in contours]
 
     # Calculate bounding boxes and extreme points
     contours_info = []
-    for cnt in contours:
-        # x, y, w, h = cv2.boundingRect(cnt)
+    for idx, cnt in enumerate(contours):
         area = cv2.contourArea(cnt)
-        if area < 50:  # Adjust area threshold as needed
+        if area < 40:  # Adjust area threshold as needed
             continue
         info = {
+            'index': idx,
             'contour': cnt,
             'area': area,
             'extLeft': tuple(cnt[cnt[:, :, 0].argmin()][0]),
@@ -113,13 +102,9 @@ def segment_characters(image_path, output_folder):
         ]
         x = info['extLeft'][0]
         y = info['extLeft'][1]
-        # cv2.imwrite(os.path.join("mediate_res", f'letter_{x}_{y}.png'), roi)
+        cv2.imwrite(os.path.join("mediate_res", f'letter_{x}_{y}_{area}.png'), roi)
 
-    # avg_area = np.mean([c['area'] for c in contours_info])
-
-    # line_deviation = avg_area * 0.1
-
-    dot_threshold = 1000
+    dot_threshold = 500
     dot_dist_threshold = 100
 
     # Merge small contours (dots) with nearby larger contours (letters)
@@ -132,7 +117,7 @@ def segment_characters(image_path, output_folder):
         if info['area'] < dot_threshold:  # Adjust area threshold as needed
             # Possible dot, find nearby larger contour
             for j in range(len(contours_info)):
-                if i == j or j in skip_indices:
+                if i == j:
                     continue
                 other = contours_info[j]
                 if other['area'] > dot_threshold:
@@ -141,6 +126,13 @@ def segment_characters(image_path, output_folder):
                     if distance < dot_dist_threshold:
                         # Merge contours
                         merged = np.concatenate((cnt, other['contour']))
+
+                        # if the countour was already merged, we need to remove the previous one
+                        if j in skip_indices:
+                            for cnt_i, cnt in enumerate(merged_contours):
+                                if cnt['index'] == j:
+                                    merged_contours.pop(cnt_i)
+                        info['index'] = j
                         info['contour'] = merged
                         info['area'] += other['area']
                         info['extBot'] = other['extBot']
@@ -148,6 +140,7 @@ def segment_characters(image_path, output_folder):
                         info['extRight'] = other['extRight'] if other['extRight'][0] > info['extRight'][0] else info['extRight']
                         merged_contours.append(info)
                         skip_indices.add(j)
+                        skip_indices.add(i)
                         break
 
             skip_indices.add(i)
@@ -167,59 +160,14 @@ def segment_characters(image_path, output_folder):
         roi = cv2.bitwise_not(roi)
         if roi.shape[0] > 0 and roi.shape[1] > 0:
             cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), roi)
-        # width = info['extRight'][0] - info['extLeft'][0]
-        # height = info['extBot'][1] - info['extTop'][1]
-
-        # mask = np.ones((height, width), dtype=np.uint8) * 255
-        # cv2.drawContours(mask, info["contour"], -1, (0, 0, 0), thickness=cv2.FILLED)
-
-        # Set background (non-contour areas) to transparent
-        # Where the binary image is black, make alpha channel transparent (0)
-        # mask[:, :, 3] = np.where(roi == 0, 0, 255)
-
-        # cv2.imwrite(os.path.join(output_folder, f'letter_{idx}.png'), mask)
-        # cv2.imshow("Contours on White Background", roi)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-        # Create an SVG drawing
-        # dwg = svgwrite.Drawing(os.path.join(output_folder, f'letter_{idx}.svg'), profile='tiny')
-
-        # # # Create a path string from the contour points
-        # # path_data = "M " + " ".join(f"{point[0][0]} {point[0][1]}" for point in info["contour"]) + "Z"
-
-        # # Create a bitmap from the array
-        # bmp = potrace.Bitmap(info["contour"])
-
-        # # Trace the bitmap to a path
-        # path = bmp.trace()
-
-        # # Add the path to the drawing
-        # dwg.add(dwg.path(d=path))
-
-        # # Save the SVG file
-        # dwg.save()
-
-
-        # height = info['extBot'][1] - info['extTop'][1]
-        # width = info['extRight'][0] - info['extLeft'][0]
-        # f = open(os.path.join(output_folder, f'letter_{idx}.svg'), 'w+')
-        # f.write('<svg width="'+str(width)+'" height="'+str(height)+'" xmlns="http://www.w3.org/2000/svg">')
-        # f.write('<path d="M')
-        # for i in range(len(info['contour'])):
-        #     #print(c[i][0])
-        #     x, y = info['contour'][i][0]
-        #     print(x)
-        #     f.write(str(x)+  ' ' + str(y)+' ')
-        # f.write('Z"/>')
-        # f.write('</svg>')
-        # f.close()
 
     print(f"Extracted {len(merged_contours)} letters.")
 
 
 if __name__ == "__main__":
-    image_path = "input.jpeg"
-    # image_path = "input_marry.jpg"
-    # image_path = "inpu_i.jpeg"
+    image_path = "input_ukr_2.jpg"
     output_folder = "result"
     segment_characters(image_path, output_folder)
+    subprocess.run(
+        ["./png_to_svg.sh", "result"],
+    )
